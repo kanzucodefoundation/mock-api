@@ -32,6 +32,7 @@ const TEST_USERS = [
     permissions: ["REPORT_VIEW", "REPORT_SUBMIT", "CRM_VIEW", "CRM_EDIT"],
     manageGroupIds: [100],
     viewGroupIds: [100, 20],
+    isActive: true,
   },
   {
     id: 152,
@@ -44,6 +45,7 @@ const TEST_USERS = [
     permissions: ["REPORT_VIEW", "REPORT_SUBMIT", "REPORT_VIEW_SUBMISSIONS", "CRM_VIEW", "CRM_EDIT", "GROUP_VIEW"],
     manageGroupIds: [20, 100, 101, 102, 103, 104],
     viewGroupIds: [20, 100, 101, 102, 103, 104, 10],
+    isActive: true,
   },
   {
     id: 153,
@@ -56,6 +58,7 @@ const TEST_USERS = [
     permissions: ["REPORT_VIEW", "REPORT_SUBMIT", "REPORT_VIEW_SUBMISSIONS", "CRM_VIEW", "CRM_EDIT", "GROUP_VIEW", "GROUP_EDIT"],
     manageGroupIds: [10, 20, 21, 22, 23, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119],
     viewGroupIds: [10, 20, 21, 22, 23, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 4],
+    isActive: true,
   },
   {
     id: 154,
@@ -68,6 +71,7 @@ const TEST_USERS = [
     permissions: ["REPORT_VIEW", "REPORT_SUBMIT", "REPORT_VIEW_SUBMISSIONS", "CRM_VIEW", "CRM_EDIT", "GROUP_VIEW", "GROUP_EDIT"],
     manageGroupIds: [4, 10, 11, 12],
     viewGroupIds: [4, 10, 11, 12, 2],
+    isActive: true,
   },
   {
     id: 155,
@@ -80,6 +84,7 @@ const TEST_USERS = [
     permissions: ["REPORT_VIEW", "REPORT_SUBMIT", "REPORT_VIEW_SUBMISSIONS", "CRM_VIEW", "CRM_EDIT", "GROUP_VIEW", "GROUP_EDIT", "USER_VIEW"],
     manageGroupIds: [2, 4, 10, 11, 12],
     viewGroupIds: [2, 4, 10, 11, 12, 1],
+    isActive: true,
   },
   {
     id: 156,
@@ -92,6 +97,7 @@ const TEST_USERS = [
     permissions: ["REPORT_VIEW", "REPORT_SUBMIT", "REPORT_VIEW_SUBMISSIONS", "CRM_VIEW", "CRM_EDIT", "GROUP_VIEW", "GROUP_EDIT", "USER_VIEW", "USER_EDIT"],
     manageGroupIds: [1, 2, 3, 4, 5],
     viewGroupIds: [1, 2, 3, 4, 5],
+    isActive: true,
   },
   {
     id: 157,
@@ -109,6 +115,7 @@ const TEST_USERS = [
     ],
     manageGroupIds: [1, 2, 3, 4, 5],
     viewGroupIds: [1, 2, 3, 4, 5],
+    isActive: true,
   },
 ];
 
@@ -763,29 +770,56 @@ app.get('/api/dashboard/summary', async (req, res) => {
 // ============ USERS ============
 app.get('/api/users', async (req, res) => {
   await delay(400);
+  const { limit = 50, offset = 0 } = req.query;  
+  const paginatedUsers = DB.users.slice(offset, offset + parseInt(limit));
+
   res.json({
-    users: TEST_USERS.slice(0, 5).map(u => ({
+    users: paginatedUsers.map(u => ({
       id: u.id,
       username: u.username,
       fullName: u.fullName,
       avatar: `https://i.pravatar.cc/200?img=${u.id}`,
       contactId: u.contactId,
       roles: u.roles,
-      isActive: true,
+      isActive: u.isActive,
     })),
     pagination: {
-      total: TEST_USERS.length,
-      limit: 50,
-      offset: 0,
-      hasMore: false,
+      total: DB.users.length,
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      hasMore: offset + parseInt(limit) < DB.users.length,
     },
+  });
+});
+
+app.get('/api/users/:id', async (req, res) => {
+  await delay(400);
+  const userId = parseInt(req.params.id);
+  const user = DB.users.find(u => u.id === userId);
+  
+  if (!user) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+
+  res.json({
+    id: user.id,
+    username: user.username,
+    fullName: user.fullName,
+    email: user.email,
+    avatar: `https://i.pravatar.cc/200?img=${user.id}`,
+    contactId: user.contactId,
+    roles: user.roles,
+    permissions: user.permissions,
+    manageGroupIds: user.manageGroupIds,
+    viewGroupIds: user.viewGroupIds,
+    isActive: user.isActive,
   });
 });
 
 app.post('/api/users', async (req, res) => {
   await delay(400);
   
-  const { contactId, password, roles, permissions, manageGroupIds, viewGroupIds } = req.body;
+  const { contactId, password, roles, permissions, manageGroupIds, viewGroupIds, isActive } = req.body;
 
   if (!contactId || !password) {
     return res.status(400).json({ message: 'contactId and password are required' });
@@ -817,6 +851,7 @@ app.post('/api/users', async (req, res) => {
     permissions: permissions || [],
     manageGroupIds: manageGroupIds || [],
     viewGroupIds: viewGroupIds || [],
+    isActive: isActive !== undefined ? isActive : true,
   };
 
   DB.users.push(newUser);
@@ -830,7 +865,7 @@ app.post('/api/users', async (req, res) => {
     contactId: newUser.contactId,
     roles: newUser.roles,
     permissions: newUser.permissions,
-    isActive: true,
+    isActive: newUser.isActive,
   });
 });
 
@@ -838,7 +873,7 @@ app.patch('/api/users/:id', async (req, res) => {
   await delay(400);
   
   const userId = parseInt(req.params.id);
-  const { password, roles, permissions, manageGroupIds, viewGroupIds } = req.body;
+  const { password, roles, permissions, manageGroupIds, viewGroupIds, isActive } = req.body;
 
   // Find the user
   const user = DB.users.find(u => u.id === userId);
@@ -862,6 +897,9 @@ app.patch('/api/users/:id', async (req, res) => {
   if (viewGroupIds !== undefined) {
     user.viewGroupIds = viewGroupIds;
   }
+  if (isActive !== undefined) {
+    user.isActive = isActive;
+  }
 
   res.json({
     id: user.id,
@@ -872,7 +910,7 @@ app.patch('/api/users/:id', async (req, res) => {
     contactId: user.contactId,
     roles: user.roles,
     permissions: user.permissions,
-    isActive: true,
+    isActive: user.isActive,
   });
 });
 
